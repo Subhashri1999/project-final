@@ -1,0 +1,23 @@
+import cv2
+import numpy as np
+import imutils
+import argparse
+
+HOGCV=cv2.HOGDescriptor()
+HOGCV.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
+def detect(frame):
+    boundingboxes,weights=HOGCV.detectMultiScale(frame,winStride=(4,4),padding=(8,8),scale=1.03)
+    person=1
+    for x,y,w,h in boundingboxes:
+        cv2.rectangle(frame,(x,y),(x+w,y+h),(0,255,0),2)
+        person=person+1
+        print(person)
+    return frame
+def detectImage():
+    image=cv2.imread("D:/old photos/201210A0/22102012352.jpg")
+    image=imutils.resize(image,width=min(800,image.shape[1]))
+    result=detect(image)
+    cv2.imshow("Output",result)
+    cv2.waitKey(0)
+
+detectImage()

@@ -1,24 +1,51 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Wed Sep 30 21:01:29 2020
+
+@author: Subhashri
+"""
+
 import cv2
 import numpy as np
 import imutils
 import argparse
+from scipy.spatial import distance as dist
 from imutils.object_detection import non_max_suppression
 
 out = cv2.VideoWriter('output.avi',cv2.VideoWriter_fourcc(*'MJPG'),15.,(640,480))
 
 HOGCV=cv2.HOGDescriptor()
 HOGCV.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
+
 def detect(frame):
     
     boundingboxes,weights=HOGCV.detectMultiScale(frame,winStride=(4,4),padding=(8,8),scale=1.03)
     boundingboxes = np.array([[x, y, x + w, y + h] for (x, y, w, h) in boundingboxes])
+    center=np.array([[x, y, x + w, y + h] for (x, y, w, h) in boundingboxes])
     person=1
+    violate=0
+    if(len(boundingboxes)>=2):
+        D = dist.cdist(center, center, metric="euclidean")
+        for i in range(0, D.shape[0]):
+            for j in range(i + 1, D.shape[1]):
+                if D[i, j] < 200:
+                    violate=violate+1
+                    
+					
+					
+    
     
     
     for (xA, yA, xB, yB) in boundingboxes:
-        cv2.rectangle(frame, (xA, yA), (xB, yB), (0, 255, 0), 2)
+        cv2.rectangle(frame, (xA, yA), (xB, yB), (0, 0, 255), 2)
+        
         person=person+1
-    cv2.putText(frame, f'No of people : {person-1}', (40,40), cv2.FONT_HERSHEY_DUPLEX, 0.8, (255,0,0), 2)    
+    
+        
+        
+    
+    cv2.putText(frame, f'No of people : {person-1}', (40,40), cv2.FONT_HERSHEY_DUPLEX, 0.8, (255,0,0), 2)
+    cv2.putText(frame, f'No of violation : {violate}', (40,60), cv2.FONT_HERSHEY_DUPLEX, 0.8, (255,0,0), 2)    
     return frame
 def detectImage():
     image=cv2.imread("C:/Users/user/Desktop/project-final/download.jpg")

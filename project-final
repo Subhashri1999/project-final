@@ -1,89 +1,135 @@
 # -*- coding: utf-8 -*-
 """
-Created on Wed Sep 30 21:01:29 2020
+Created on Tue Feb 23 11:32:59 2021
 
-@author: Subhashri
+@author: subha
 """
 
-import cv2
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Feb  8 11:11:38 2021
+
+@author: subha
+"""
+
+from tensorflow.keras.preprocessing.image import img_to_array
+from tensorflow.keras.models import load_model
 import numpy as np
+import cv2
+import cvlib as cv
 import imutils
-import argparse
-from scipy.spatial import distance as dist
-from imutils.object_detection import non_max_suppression
 
-out = cv2.VideoWriter('output.avi',cv2.VideoWriter_fourcc(*'MJPG'),15.,(640,480))
-
-HOGCV=cv2.HOGDescriptor()
-HOGCV.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
-
-def detect(frame):
-    
-    boundingboxes,weights=HOGCV.detectMultiScale(frame,winStride=(4,4),padding=(8,8),scale=1.03)
-    boundingboxes = np.array([[x, y, x + w, y + h] for (x, y, w, h) in boundingboxes])
-    center=np.array([[x, y, x + w, y + h] for (x, y, w, h) in boundingboxes])
-    person=1
-    violate=0
-    if(len(boundingboxes)>=2):
-        D = dist.cdist(center, center, metric="euclidean")
-        for i in range(0, D.shape[0]):
-            for j in range(i + 1, D.shape[1]):
-                if D[i, j] < 200:
-                    violate=violate+1
                     
-					
-					
-    
-    
-    
-    for (xA, yA, xB, yB) in boundingboxes:
-        cv2.rectangle(frame, (xA, yA), (xB, yB), (0, 0, 255), 2)
-        
-        person=person+1
-    
-        
-        
-    
-    cv2.putText(frame, f'No of people : {person-1}', (40,40), cv2.FONT_HERSHEY_DUPLEX, 0.8, (255,0,0), 2)
-    cv2.putText(frame, f'No of violation : {violate}', (40,60), cv2.FONT_HERSHEY_DUPLEX, 0.8, (255,0,0), 2)    
-    return frame
-def detectImage():
-    image=cv2.imread("C:/Users/user/Desktop/project-final/download.jpg")
-    image=imutils.resize(image,width=min(800,image.shape[1]))
-    result=detect(image)
-    cv2.imshow("Output",result)
-    cv2.waitKey(0)
+# load model- loads a model already saved
+model = load_model('C:/Users/subha/Downloads/gender_detection.model')
 
-def detectVideo():
-    video = cv2.VideoCapture('C:/Users/user/Desktop/project-final/vedio7.mp4') 
-
-    while video.isOpened():
-        check,frame=video.read()
-        if check:
-            frame=imutils.resize(frame,width=min(400,frame.shape[1]))
-            frame=detect(frame)
-            out.write(frame.astype('uint8'))
-            cv2.imshow("Output",frame)
-            if cv2.waitKey(1) & 0xFF==ord('q'):
-                break
-        else:
-            break
-    video.release()
-    cv2.destroyAllWindows()
+# open video
+webcam = cv2.VideoCapture('C:/Users/subha/Desktop/project-final/vedio9.mp4')
     
-def detectCamera():
-    video = cv2.VideoCapture(0) 
+classes = ['man','woman']
 
-    while True:
-        check,frame=video.read()
-        if check:
-            frame=imutils.resize(frame,width=min(400,frame.shape[1]))
-            frame=detect(frame)
-            cv2.imshow("Output",frame)
-            if cv2.waitKey(25) & 0xFF==ord('q'):
-                break
-        else:
-            break
-    video.release()
+def Check(a,  b):
+    dist = ((a[0] - b[0]) ** 2  +  (a[1] - b[1]) ** 2 ) ** 0.5
+     
+    
+    if 0 < dist < 300:
+        return True
+    else:
+        return False
+
+
+
+# loop through frames
+while webcam.isOpened():
+
+    # read frame from video 
+    status, frame = webcam.read()
+    if status:
+        
+        center = []
+        status = []
+        pairs = []
+        violate=0
+        
+        #resize the image without changing aspect ratio- hence uses only width or height
+        frame=imutils.resize(frame,width=min(800,frame.shape[1]))
+
+        # apply face detection- returns bounding box corners - 
+        #Underneath it is using OpenCV’s dnn module with a pre-trained caffemodel to detect faces
+        #confidence gives the distance to nearest database item
+        face, confidence = cv.detect_face(frame)
+    
+
+        person=1
+
+        # loop through detected faces
+        #enumerate returns counter in form of enumerate object
+        for idx, f in enumerate(face):
+
+            # get corner points of face rectangle        
+            (startX, startY) = f[0], f[1]
+            (endX, endY) = f[2], f[3]
+            center.append([int(startX + endX / 2), int(startY + endY / 2)])
+            status.append(False)
+        
+
+            # draw rectangle over face
+            cv2.rectangle(frame, (startX,startY), (endX,endY), (0,255,0), 2)
+            person=person+1
+            # crop the detected face region
+            #returns array
+            face_crop = np.copy(frame[startY:endY,startX:endX])
+            #shape- returns a tuple which gives the number of rows and columns-(row,column)
             
-detectVideo()
+            
+            #size too small - maybe wrong detection
+            if (face_crop.shape[0]) < 10 or (face_crop.shape[1]) < 10:
+                continue
+
+            # preprocessing for gender detection model
+            face_crop = cv2.resize(face_crop, (96,96))
+            #cast to float
+            face_crop = face_crop.astype("float") / 255.0
+            #converts the image to numpy array
+            face_crop = img_to_array(face_crop)
+            #expands the dimensions of the array
+            #numpy.expand_dims(arr, axis)- axis is the position where the new axis is to be placed
+            face_crop = np.expand_dims(face_crop, axis=0)
+
+            # apply gender detection on face
+            conf = model.predict(face_crop)[0] # model.predict return a 2D matrix, ex: [[9.9993384e-01 7.4850512e-05]]
+
+            # get label with max accuracy
+            idx = np.argmax(conf)
+            label = classes[idx]
+
+            label = "{}: {:.2f}%".format(label, conf[idx] * 100)
+
+            Y = startY - 10 if startY - 10 > 10 else startY + 10
+
+            # write label and confidence above face rectangle
+            cv2.putText(frame, label, (startX, Y),  cv2.FONT_HERSHEY_SIMPLEX,0.7, (0, 255, 0), 2)
+        for i in range(len(center)):
+            
+            for j in range(len(center)):
+                close = Check(center[i], center[j])
+            
+
+                if close:
+                    pairs.append([center[i], center[j]])
+                    status[i] = True
+                    status[j] = True
+                    violate = violate + 1
+                    
+        cv2.putText(frame, f'No of people : {person-1}', (40,40), cv2.FONT_HERSHEY_DUPLEX, 0.8, (255,0,0), 2)
+        cv2.putText(frame, f'No of violations : {violate-1}', (40,60), cv2.FONT_HERSHEY_DUPLEX, 0.8, (255,0,0), 2)
+    # display output
+    cv2.imshow("gender detection", frame)
+
+    # press "Q" to stop
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+# release resources
+webcam.release()
+cv2.destroyAllWindows()
